@@ -4,35 +4,34 @@ from PIL import Image
 import io
 import requests
 import os
-import fitz  # PyMuPDF
+import pdfplumber
+from pdf2image import convert_from_bytes
 from dotenv import load_dotenv
 
-# Load API Key
+# Load API key
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# OCR Function
-def extract_text_from_file(file):
-    ext = file.name.split('.')[-1].lower()
-    
-    if ext in ['jpg', 'jpeg', 'png']:
-        image = Image.open(file).convert("RGB")
-        text = pytesseract.image_to_string(image)
-        return text.strip()
-    
-    elif ext == 'pdf':
-        text = ""
-        pdf_data = file.read()
-        doc = fitz.open("pdf", pdf_data)
-        for page in doc:
-            pix = page.get_pixmap(dpi=300)
-            img = Image.open(io.BytesIO(pix.tobytes("png")))
-            page_text = pytesseract.image_to_string(img)
-            text += page_text + "\n"
-        return text.strip()
-    
-    else:
-        return "Unsupported file type."
+# Extract text
+def extract_text_from_pdf(file):
+    file.seek(0)
+    text = ""
+    try:
+        with pdfplumber.open(file) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+    except:
+        pass
+
+    if not text.strip():
+        file.seek(0)
+        images = convert_from_bytes(file.read(), dpi=300)
+        for img in images:
+            text += pytesseract.image_to_string(img) + "\n"
+
+    return text.strip()
 
 # Mistral via Groq
 def extract_invoice_info_with_mistral(ocr_text):
@@ -61,7 +60,7 @@ Invoice Text:
 """
 
     data = {
-        "model": "llama3-8b-8192",
+        "model": "llama3-8b-8192",  # Use available Groq model
         "messages": [
             {"role": "system", "content": "You are a helpful AI that extracts structured data from invoices."},
             {"role": "user", "content": prompt}
@@ -79,17 +78,19 @@ Invoice Text:
     else:
         return f"❌ API Error {response.status_code}: {response.text}"
 
-# Streamlit App
+# Streamlit UI
 st.set_page_config(page_title="📄 Invoice Extractor", layout="centered")
 st.title("📄 Invoice Uploader & Extractor")
-
-st.markdown("Upload an invoice file (PDF or image). We'll extract key invoice fields using OCR + Mistral (via Groq API).")
 
 uploaded_file = st.file_uploader("Upload Invoice", type=["pdf", "jpg", "jpeg", "png"])
 
 if uploaded_file:
     with st.spinner("🔍 Performing OCR..."):
-        ocr_text = extract_text_from_file(uploaded_file)
+        if uploaded_file.name.lower().endswith(".pdf"):
+            ocr_text = extract_text_from_pdf(uploaded_file)
+        else:
+            img = Image.open(uploaded_file).convert("RGB")
+            ocr_text = pytesseract.image_to_string(img)
 
     st.subheader("📄 OCR Extracted Text:")
     st.text_area("Raw Invoice Text", ocr_text, height=200)
