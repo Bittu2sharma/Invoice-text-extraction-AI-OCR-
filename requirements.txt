@@ -1,0 +1,6 @@
+streamlit
+pytesseract
+Pillow
+fitz  # PyMuPDF
+requests
+python-dotenv
