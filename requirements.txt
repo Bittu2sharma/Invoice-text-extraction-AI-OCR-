@@ -1,6 +1,7 @@
 streamlit
 pytesseract
+pdfplumber
+pdf2image
 Pillow
-fitz==1.22.5
-requests
 python-dotenv
+requests
