@@ -1,6 +1,6 @@
 streamlit
 pytesseract
 Pillow
-fitz  # PyMuPDF
+fitz==1.22.5
 requests
 python-dotenv
